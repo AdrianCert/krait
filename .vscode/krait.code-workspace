@@ -1,0 +1,18 @@
+{
+  "folders": [
+    {
+      "path": ".."
+    },
+    {
+      "path": "../packages/signal"
+    }
+  ],
+  "settings": {
+    "cSpell.words": [
+      "Hasher",
+      "pyclass",
+      "pymethods",
+      "pymodule"
+    ]
+  }
+}

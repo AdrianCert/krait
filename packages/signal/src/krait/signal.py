@@ -1,5 +1,4 @@
 import typing
-
 from contextlib import contextmanager
 
 _VSTACK_VAR = "__virtual_stack"
@@ -76,3 +75,12 @@ class SignaledProperty:
         self.truncated = True
         for _, dep_obj in self.deps.items():
             dep_obj.truncate()
+
+
+class signal(SignaledProperty):  # noqa: N801
+    """
+    The signal class is a decorator and descriptor used to define reactive properties in a class. It allows
+    for automatic recalculation and caching of dependent properties when the base properties change. This
+    is particularly useful for scenarios where properties depend on each other and need to be recalculated
+    when their dependencies change.
+    """

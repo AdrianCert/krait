@@ -1,6 +1,6 @@
-from krait.signal import SignaledProperty as signal
-
 import time
+
+from krait.signal import signal
 
 
 class PricingPipeline:

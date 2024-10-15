@@ -1,0 +1,23 @@
+name: Release Package
+
+on:
+  push:
+    tags:
+      - "*-*"
+
+jobs:
+  release-package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: setup uv
+        uses: astral-sh/setup-uv@v3
+      - name: setup python
+        run: uv python install
+      - name: Parse & validate version
+        id: tag-parse
+        working-directory: .
+        run: |
+          # uv run --with .[ci] -- python .github/scripts/parse4tag.py
+          # uv run --isolated --with-editable .[ci] -- python .github/scripts/parse4tag.py
