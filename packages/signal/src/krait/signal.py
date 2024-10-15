@@ -1,5 +1,4 @@
 import typing
-
 from contextlib import contextmanager
 
 _VSTACK_VAR = "__virtual_stack"
