@@ -1,0 +1,11 @@
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-component
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: krait
+spec:
+  type: package.python
+  lifecycle: experimental
+  owner: guests
+---
