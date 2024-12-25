@@ -18,7 +18,11 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["/packages/all/src/krait"]
+packages = [
+    "/packages/all/src/krait",
+    "/packages/signal/src/krait",
+    # more packages here
+]
 
 [tool.ruff.lint]
 extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB"]
