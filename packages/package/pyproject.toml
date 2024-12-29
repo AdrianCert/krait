@@ -1,0 +1,27 @@
+[project]
+name = "krait-package"
+version = "0.1.0"
+description = "package extensions"
+authors = [
+    { name = "Panaintescu Adrian Valentin", email = "adrian.cert@gmail.com" },
+]
+dependencies = [
+    "importlib-metadata>=8.5.0",
+    # other dependencies here
+    # TODO: make dependencies more relaxed, lower compatible version
+]
+readme = "readme.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/krait"]
+
+[tool.ruff.lint]
+extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB"]
