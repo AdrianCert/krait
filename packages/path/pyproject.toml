@@ -1,0 +1,26 @@
+[project]
+name = "krait-path"
+version = "0.1.0"
+description = "path extensions"
+authors = [
+    { name = "Panaintescu Adrian Valentin", email = "adrian.cert@gmail.com" },
+]
+dependencies = [
+    "pyyaml>=6.0.2",
+    # "krait-logging>=0.1.0",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/krait"]
+
+[tool.ruff.lint]
+extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB"]
