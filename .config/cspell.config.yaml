@@ -3,10 +3,13 @@ ignorePaths: []
 dictionaryDefinitions: []
 dictionaries: []
 words:
-  - tomlkit
+  - FURB
   - Hasher
   - pyclass
   - pymethods
   - pymodule
+  - pyyaml
+  - sdist
+  - tomlkit
 ignoreWords: []
 import: []

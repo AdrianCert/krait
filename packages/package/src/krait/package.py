@@ -150,6 +150,8 @@ def explore_pth_file(*files: typing.Iterable[Path]):
     for file in files:
         # extract the locations of the distribution from the .pth file
         # and explore the distribution directory
+        if not file.exists():
+            continue
         for content in Path(file).read_text().splitlines():
             # maybe there is a need to handle as well the case where the content is import statement
             # but for now, we will ignore it since this is a dangerous operation to execute arbitrary code
@@ -226,7 +228,7 @@ def files4package(only_names=False, include_editable=False):
     def _filter(file: importlib_metadata.PackagePath, context: dict = {}):
         if file.suffix == ".pth":
             if "pth" in context:
-                context["pth"].append(file)
+                context["pth"].append(file.locate())
             return False
         return ".dist-info" not in str(file)
 

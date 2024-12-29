@@ -23,6 +23,7 @@ allow-direct-references = true
 
 [tool.hatch.build]
 packages = [
+    "/packages/logging/src/krait",
     "/packages/package/src/krait",
     "/packages/path/src/krait",
     "/packages/signal/src/krait",
