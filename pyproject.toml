@@ -1,13 +1,16 @@
 [project]
 name = "krait"
-version = "0.1.0"
-description = "Add your description here"
+description = "A versatile Python package for managing and organizing various utilities and tools, including logging, packaging, path handling, and signaled properties."
 readme = "readme.md"
 requires-python = ">=3.8"
 dependencies = [
     # all dependencies here
     "importlib-metadata>=8.5.0",
     "pyyaml>=6.0.2",
+]
+dynamic = [
+    "version",
+    # other dynamic fields here
 ]
 
 [project.optional-dependencies]
@@ -23,6 +26,7 @@ allow-direct-references = true
 
 [tool.hatch.build]
 packages = [
+    "/packages/lib/src/krait",
     "/packages/logging/src/krait",
     "/packages/package/src/krait",
     "/packages/path/src/krait",
@@ -30,5 +34,14 @@ packages = [
     # more packages here
 ]
 
+[tool.hatch.metadata.hooks.custom]
+path = "scripts/versioning.py"
+# vsc-counts = false
+
 [tool.ruff.lint]
 extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB"]
+
+[tool.uv]
+# during pip install, git tags are not visible unless this
+# https://docs.astral.sh/uv/reference/settings/#cache-keys
+cache-keys = [{ git = { commit = true, tags = true } }]
