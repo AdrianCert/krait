@@ -9,6 +9,7 @@ words:
   - pyclass
   - pymethods
   - pymodule
+  - pyproject
   - pyyaml
   - sdist
   - tomlkit
