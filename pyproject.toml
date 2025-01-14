@@ -1,5 +1,5 @@
 [project]
-name = "krait"
+name = "krait-kit"
 description = "A versatile Python package for managing and organizing various utilities and tools, including logging, packaging, path handling, and signaled properties."
 readme = "readme.md"
 requires-python = ">=3.8"
