@@ -32,7 +32,7 @@ build.packages = [
     "/packages/signal/src/krait",
     # more packages here
 ]
-# build.targets.sdist.
 
 [tool.ruff.lint]
-extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB"]
+pydocstyle.convention = "numpy"
+extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB", "D"]

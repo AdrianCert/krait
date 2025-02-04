@@ -6,7 +6,9 @@ words:
   - FURB
   - Hasher
   - levelname
+  - numpy
   - pyclass
+  - pydocstyle
   - pymethods
   - pymodule
   - pyproject

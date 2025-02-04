@@ -1,3 +1,11 @@
+"""
+Utilities for working with Python package distributions.
+
+Include functions to map file paths to package names, check if a package is in editable mode,
+and extract package origins. It also defines the `PackageInfo` class for querying package
+information and resources.
+"""
+
 import inspect
 import os
 import sys
@@ -88,7 +96,6 @@ def extract_package_origin(dist):
     Path or None
         The origin of the package distribution.
     """
-
     try:
         url: str = dist.origin.url
 
@@ -122,7 +129,7 @@ def explore_package_location(path: Path):
 
 
 def explore_pth_file(*files: typing.Iterable[Path]):
-    """
+    r"""
     Explore the locations specified in .pth files and yield package locations.
 
     Parameters
@@ -166,7 +173,7 @@ def extract_editable_package_files(
     dist: importlib_metadata.Distribution, pth_files: typing.List[Path] = None
 ):
     """
-    Extracts the file paths of all Python files in an editable (development mode) package distribution.
+    Extract the file paths of all Python files in an editable (development mode) package distribution.
 
     Parameters
     ----------
@@ -261,8 +268,7 @@ def files4package(only_names=False, include_editable=False):
 
 class PackageInfo:
     """
-    A class to represent package information and provide various utilities
-    related to the package.
+    Provide package information and various utilities related to the package.
 
     Parameters
     ----------
@@ -277,9 +283,7 @@ class PackageInfo:
 
     @signal
     def map_file2package():
-        """
-        A mapping of file paths to package names.
-        """
+        """Map for file paths to package names."""
         return files4package(only_names=True, include_editable=True)
 
     @classmethod
@@ -328,27 +332,90 @@ class PackageInfo:
 
     @signal
     def editable(self):
+        """
+        Check if the distribution is editable.
+
+        Returns
+        -------
+        bool
+            True if the distribution is editable, False otherwise.
+        """
         return is_editable(self.dist)
 
     @property
     def version(self):
+        """
+        Get the version of the package.
+
+        Returns
+        -------
+        str
+            The version of the package as a string.
+        """
         return self.dist.version
 
     @property
     def dist_name(self):
+        """
+        Get the distribution name.
+
+        Returns
+        -------
+        str
+            The name of the distribution.
+        """
         return self.dist.name
 
     @signal
     def location(self) -> Path:
+        """
+        Return the location of the distribution file.
+
+        Returns
+        -------
+        Path
+            The path to the distribution file.
+        """
         return self.dist.locate_file("")
 
     @property
     def resource(self):
+        """
+        Get the path to the resources directory.
+
+        If the package is editable, the path is derived from the package origin.
+        Otherwise, the path is derived from the package location.
+
+        Returns
+        -------
+        pathlib.Path
+            The path to the resources directory.
+        """
         if self.editable:
             return extract_package_origin(self.dist) / "resources"
         return self.location.parent / "resources"
 
     def resolve_resource(self, uri: str, not_found_ok=False):
+        """
+        Resolve a resource URI to a file path.
+
+        Parameters
+        ----------
+        uri : str
+            The resource URI to resolve. Should start with "res://".
+        not_found_ok : bool, optional
+            If True, return None instead of raising an exception when the resource is not found (default is False).
+
+        Returns
+        -------
+        pathlib.Path or None
+            The resolved file path if the resource is found, otherwise None if `not_found_ok` is True.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the resource is not found and `not_found_ok` is False.
+        """
         if uri.startswith("res://"):
             filename = uri[6:]
         candidate = self.resource / filename
@@ -359,8 +426,36 @@ class PackageInfo:
         raise FileNotFoundError(f"Resource not found: {uri}")
 
     def query_files(self, file_path):
+        """
+        Query files in the specified location that match the given file path pattern.
+
+        Parameters
+        ----------
+        file_path : str
+            The file path pattern to search for within the location.
+
+        Yields
+        ------
+        pathlib.Path
+            Paths of files that match the given file path pattern.
+        """
         yield from self.location.glob(f"**/*{file_path}")
 
 
 def this(relative_frame=1):
+    """
+    Retrieve package information from the caller's context.
+
+    Parameters
+    ----------
+    relative_frame : int, optional
+        The number of frames to go back in the stack to find the caller's context.
+        Default is 1.
+
+    Returns
+    -------
+    PackageInfo
+        An instance of `PackageInfo` containing information about the package
+        from the caller's context.
+    """
     return PackageInfo.from_caller(relative_frame=relative_frame + 1)
