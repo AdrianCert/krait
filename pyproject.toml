@@ -3,7 +3,8 @@ name = "krait-kit"
 description = "A versatile Python package for managing and organizing various utilities and tools, including logging, packaging, path handling, and signaled properties."
 readme = "README.md"
 requires-python = ">=3.8"
-version = "25.2.0"
+version = "25.2.1"
+license = "MIT"
 dependencies = [
     # all dependencies here
     "importlib-metadata>=8.5.0",
