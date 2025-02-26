@@ -15,6 +15,58 @@ PathLike = typing.Union[str, Path]
 mimetypes.add_type("text/yaml", ".yaml")
 mimetypes.add_type("text/yaml", ".yml")
 
+_REG_HANDLER = {
+    "application/json": json.loads,
+    "text/yaml": yaml.safe_load,
+}
+
+
+def load_any(
+    path: PathLike,
+    mimetype: str = None,
+    load_raw_text=True,
+    load_raw_binary=False,
+):
+    """
+    Load the content of a file based on its MIME type.
+
+    Parameters
+    ----------
+    path : PathLike
+        The path to the file to be loaded.
+    mimetype : str, optional
+        The MIME type of the file. If not provided, it will be guessed based on the file extension.
+    load_raw_text : bool, default=True
+        Whether to load the file as raw text if the MIME type is not recognized.
+    load_raw_binary : bool, default=False
+        Whether to load the file as raw binary if the MIME type is not recognized.
+
+    Returns
+    -------
+    object
+        The content of the file. The type of the returned object depends on the MIME type:
+        - JSON: dict or list
+        - YAML: dict or list
+        - Raw text: str
+        - Raw binary: bytes
+
+    Raises
+    ------
+    ValueError
+        If the file type is unsupported and neither `load_raw_text` nor `load_raw_binary` is True.
+    """
+    if mimetype is None:
+        mimetype, _ = mimetypes.guess_type(path)
+    if mimetype == "application/json":
+        return json.loads(Path(path).read_text())
+    if mimetype == "text/yaml":
+        return yaml.safe_load(Path(path).read_text())
+    if load_raw_text:
+        return path.read_text()
+    if load_raw_binary:
+        return path.read_bytes()
+    raise ValueError(f"Unsupported file type: {mimetype}")
+
 
 class PathHelper:
     @staticmethod
@@ -130,54 +182,6 @@ class PathHelper:
                 item.unlink()
             except Exception:
                 pass
-
-    @classmethod
-    def load_any(
-        cls,
-        path: PathLike,
-        mimetype: str = None,
-        load_raw_text=True,
-        load_raw_binary=False,
-    ):
-        """
-        Load the content of a file based on its MIME type.
-
-        Parameters
-        ----------
-        path : PathLike
-            The path to the file to be loaded.
-        mimetype : str, optional
-            The MIME type of the file. If not provided, it will be guessed based on the file extension.
-        load_raw_text : bool, default=True
-            Whether to load the file as raw text if the MIME type is not recognized.
-        load_raw_binary : bool, default=False
-            Whether to load the file as raw binary if the MIME type is not recognized.
-
-        Returns
-        -------
-        object
-            The content of the file. The type of the returned object depends on the MIME type:
-            - JSON: dict or list
-            - YAML: dict or list
-            - Raw text: str
-            - Raw binary: bytes
-
-        Raises
-        ------
-        ValueError
-            If the file type is unsupported and neither `load_raw_text` nor `load_raw_binary` is True.
-        """
-        if mimetype is None:
-            mimetype, _ = mimetypes.guess_type(path)
-        if mimetype == "application/json":
-            return json.loads(Path(path).read_text())
-        if mimetype == "text/yaml":
-            return yaml.safe_load(Path(path).read_text())
-        if load_raw_text:
-            return path.read_text()
-        if load_raw_binary:
-            return path.read_bytes()
-        raise ValueError(f"Unsupported file type: {mimetype}")
 
     @classmethod
     def move_items(

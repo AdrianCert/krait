@@ -19,6 +19,13 @@ dynamic = [
 ci = ["packaging", "tomlkit"]
 all = []
 
+
+[project.entry-points."krait.transcoder"]
+yaml = "msgspec.yaml"
+toml = "msgspec.toml"
+json = "msgspec.json"
+msgspec = "msgspec.msgspec"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

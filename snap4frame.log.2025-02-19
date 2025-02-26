@@ -1,0 +1,4 @@
+[2025-02-19 00:37:56,826] snap4frame - INFO - Registered <class 'snap4frame.processor.kit.ConvertToDictProcessor'> as short_name with converter
+[2025-02-19 00:37:56,826] snap4frame - INFO - Registered <class 'snap4frame.processor.kit.StreamProcessor'> as short_name with stream
+[2025-02-19 00:37:56,826] snap4frame - INFO - Registered <class 'snap4frame.processor.kit.FileSaveProcessor'> as short_name with file
+[2025-02-19 00:37:56,826] snap4frame - INFO - Registered <class 'snap4frame.processor.kit.WebHookProcessor'> as short_name with webhook

@@ -1,29 +1,29 @@
 """
-This module implements a reactive property system inspired by modern web frameworks 
-such as SolidJS and ReactJS. It allows for the creation of properties that can react 
-to changes in their dependencies, enabling automatic recalculation and caching of 
-derived values. This is particularly useful for building dynamic, dependency-aware 
+This module implements a reactive property system inspired by modern web frameworks
+such as SolidJS and ReactJS. It allows for the creation of properties that can react
+to changes in their dependencies, enabling automatic recalculation and caching of
+derived values. This is particularly useful for building dynamic, dependency-aware
 systems in Python.
 
 Features:
 ---------
 - **Signal Handlers**: Manage the behavior and lifecycle of signal-enabled properties.
   Handlers ensure that the origin value remains consistent with the property they are managing.
-- **Dynamic Signals**: Support for dynamic, callable properties with caching and 
+- **Dynamic Signals**: Support for dynamic, callable properties with caching and
   expiration capabilities.
-- **Dependency Tracking**: Automatically tracks relationships between properties to 
+- **Dependency Tracking**: Automatically tracks relationships between properties to
   propagate changes efficiently, similar to state management in ReactJS.
 
 
 Modules and Classes:
 --------------------
-- BaseSignalHandler: A base class for managing signal behaviors, ensuring that handler 
+- BaseSignalHandler: A base class for managing signal behaviors, ensuring that handler
   origin values remain consistent with the property.
-- SignaledProperty: A descriptor that enables reactive properties, tracking dependencies, 
+- SignaledProperty: A descriptor that enables reactive properties, tracking dependencies,
   and handling updates automatically.
-- DynamicSignaledType: A specialized handler for callable properties, supporting caching 
+- DynamicSignaledType: A specialized handler for callable properties, supporting caching
   and controlled expiration of values.
-- signal: A decorator and subclass of `SignaledProperty` for defining reactive properties 
+- signal: A decorator and subclass of `SignaledProperty` for defining reactive properties
   within classes.
 
 Notes:
@@ -46,9 +46,10 @@ Notes:
     ```
 
 
-This module is suitable for scenarios requiring state management, derived computations, 
+This module is suitable for scenarios requiring state management, derived computations,
 or reactive programming principles in Python.
 """
+
 import datetime
 import inspect
 import typing
@@ -91,7 +92,7 @@ class BaseSignalHandler:
     original_value: typing.Any
     property: "SignaledProperty"
 
-    def __init__(self, original_value, *args, **kwargs) -> None:
+    def __init__(self, original_value, *args, hashing=True, **kwargs) -> None:
         """
         Initialize a BaseSignalHandler instance.
 
@@ -101,6 +102,7 @@ class BaseSignalHandler:
             The original value of the signal.
         """
         self.original_value = original_value
+        self.hashing = hashing and (hashing if callable(hashing) else _hash_object)
         self.property = None
 
     @contextmanager

@@ -2,6 +2,8 @@ import time
 
 from krait.signal import signal
 
+# signal = property
+
 
 class PricingPipeline:
     # Initial base price for a product

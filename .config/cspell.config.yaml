@@ -6,6 +6,7 @@ words:
   - FURB
   - Hasher
   - levelname
+  - msgpack
   - numpy
   - pyclass
   - pydocstyle
