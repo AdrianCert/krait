@@ -8,9 +8,7 @@ from packaging.version import Version
 
 
 class CalendarVersionMetadataHook(MetadataHookInterface):
-    """
-    Hatch metadata hook to populate 'project.version' based on the current date.
-    """
+    """Hatch metadata hook to populate 'project.version' based on the current date."""
 
     PLUGIN_NAME = "calendar-versions"
 
@@ -38,7 +36,6 @@ class CalendarVersionMetadataHook(MetadataHookInterface):
         cache-keys = [{ git = { commit = true, tags = true } }]
 
         """
-
         if "version" not in metadata.get("dynamic", []):
             raise ValueError(
                 "Cannot setup 'version' when 'version' is not listed in 'project.dynamic'."

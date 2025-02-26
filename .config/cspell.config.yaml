@@ -1,19 +1,15 @@
 version: "0.2"
 ignorePaths: []
 dictionaryDefinitions: []
-dictionaries: []
+dictionaries:
+  - en
+  - technical
+  - python
 words:
+  - covdefaults
   - FURB
-  - Hasher
-  - levelname
-  - numpy
-  - pyclass
-  - pydocstyle
-  - pymethods
-  - pymodule
-  - pyproject
-  - pyyaml
-  - sdist
-  - tomlkit
+  - Panaintescu
+  - pypa
+  - techdocs
 ignoreWords: []
 import: []

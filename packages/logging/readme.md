@@ -9,7 +9,7 @@ This package provides advanced logging utilities for Python, including asynchron
 ## Features
 
 1. **Asynchronous File Logging**: Efficiently writes log records to a file in a separate thread.
-2. **Custom Logging Filters**: 
+2. **Custom Logging Filters**:
    - Add fully qualified module paths to log records.
    - Skip specific log records based on flags.
 3. **Enhanced Logging Levels**: Supports additional levels like `TRACE` and `NOTICE`.

@@ -93,76 +93,6 @@ class SkipFlagFilter(logging.Filter):
         return not getattr(record, self.flag_name, False)
 
 
-def configure_logging(
-    log_location: typing.Optional[Path] = None,
-    log_level=logging.DEBUG,
-    task_name: str = None,
-):
-    """
-    Configure the logging system with custom handlers and formatters.
-
-    Parameters
-    ----------
-    log_location : typing.Optional[Path], optional
-        The location where the log file will be saved. If not provided, the current working directory will be used.
-    log_level : int, optional
-        The logging level to be set for the logger. Default is `logging.DEBUG`.
-    task_name : str, optional
-        The name of the task to be included in the log messages. If not provided, no task name will be included.
-
-    Returns
-    -------
-    None
-    """
-    logger = getLogger()
-    from krait import path
-
-    log_location = path.PathHelper.resolve_outfile(
-        log_location or Path.cwd(),
-        f"{logger.name}.logs",
-    )
-
-    # Create handlers
-    c_handler = logging.StreamHandler()
-    f_handler = AsyncFileHandler(log_location)
-
-    # Create formatters and add it to handlers
-    format_prefix = f"[{task_name}]" if task_name else ""
-    format_base = "[%(levelname)s][%(qual_module)s:%(funcName)s:%(lineno)d] %(message)s"
-
-    f_format = logging.Formatter(
-        "{prefix}[%(name)s][%(asctime)s]{base}".format(
-            prefix=format_prefix,
-            base=format_base,
-        )
-    )
-    c_format = logging.Formatter(
-        "{prefix}{base}".format(
-            prefix=format_prefix,
-            base=format_base,
-        )
-    )
-
-    c_handler.setFormatter(c_format)
-    f_handler.setFormatter(f_format)
-
-    # Add the custom filter to the handlers
-    full_module_filter = QualModulePathFilter()
-    skip_display_filter = SkipFlagFilter()
-    c_handler.addFilter(skip_display_filter)
-    c_handler.addFilter(full_module_filter)
-    f_handler.addFilter(full_module_filter)
-
-    # Set the log level
-    logger.setLevel(log_level)
-
-    # Add handlers to the logger
-    logger.handlers.clear()
-    logger.addHandler(c_handler)
-    if not task_name:
-        logger.addHandler(f_handler)
-
-
 class ReflexiveLogger:
     @staticmethod
     def get_logger(relative_frame=1):
@@ -188,41 +118,6 @@ class ReflexiveLogger:
         return logging.getLogger(logger_name)
 
 
-TRACE = 5
-DEBUG = logging.DEBUG
-INFO = logging.INFO
-WARNING = logging.WARNING
-ERROR = logging.ERROR
-CRITICAL = logging.CRITICAL
-NOTICE = 60
-VERBOSITY_LEVELS = {
-    0: WARNING,
-    1: INFO,
-    2: DEBUG,
-    3: TRACE,
-}
-
-
-def set_verbose_level(logger: logging.Logger, level: int):
-    logger.setLevel(VERBOSITY_LEVELS[min(max(level, 0), 3)])
-
-
-def impl_notice(self, message, *args, stacklevel=1, **kwargs):
-    if self.isEnabledFor(NOTICE):
-        self._log(NOTICE, message, args, stacklevel=stacklevel + 1, **kwargs)
-
-
-def impl_trace(self, message, *args, stacklevel=1, **kwargs):
-    if self.isEnabledFor(TRACE):
-        self._log(TRACE, message, args, stacklevel=stacklevel + 1, **kwargs)
-
-
-logging.Logger.notice = impl_notice
-logging.Logger.trace = impl_trace
-logging.addLevelName(NOTICE, "NOTICE")
-logging.addLevelName(TRACE, "TRACE")
-
-
 def getLogger(name: str = None, /, relative_frame=1):  # noqa: N802
     if name is not None:
         return logging.getLogger(name)
@@ -231,10 +126,6 @@ def getLogger(name: str = None, /, relative_frame=1):  # noqa: N802
 
 def _log(level, message, *args, **kwargs):
     getLogger().log(level, message, *args, **kwargs)
-
-
-def trace(message, *args, **kwargs):
-    getLogger().trace(message, *args, **kwargs)
 
 
 def info(message, *args, **kwargs):
@@ -261,16 +152,10 @@ def critical(message, *args, **kwargs):
     getLogger().critical(message, *args, **kwargs)
 
 
-def notice(message, *args, **kwargs):
-    getLogger().notice(message, *args, **kwargs)
-
-
 if typing.TYPE_CHECKING:
-    trace = logging.trace  # noqa: F811
     info = logging.info  # noqa: F811
     debug = logging.debug  # noqa: F811
     warning = logging.warning  # noqa: F811
     error = logging.error  # noqa: F811
     exception = logging.exception  # noqa: F811
     critical = logging.critical  # noqa: F811
-    notice = logging.notice  # noqa: F811

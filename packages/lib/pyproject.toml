@@ -21,6 +21,3 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/krait"]
-
-[tool.ruff.lint]
-extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB"]

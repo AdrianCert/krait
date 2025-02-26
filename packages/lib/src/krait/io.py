@@ -5,8 +5,7 @@ import re
 
 class ObservableBuffer(io.StringIO):
     """
-    A stream buffer class that intercepts writes and provides hooks for callbacks,
-    redirection to other buffers, and data collection.
+    The Stream buffer intercept writes and provides hooks for callbacks, redirection to other buffers, and data collection.
 
     The `ObservableBuffer` acts as a proxy for stream-like objects, allowing users
     to attach custom behavior when data is written to the buffer. It supports
@@ -49,7 +48,7 @@ class ObservableBuffer(io.StringIO):
 
     def write(self, data):
         """
-        Writes the data to the output stream.
+        Write the data to the output stream.
 
         Args:
             data (str): The data to be written.
