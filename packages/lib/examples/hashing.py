@@ -5,7 +5,7 @@ RUN: python packages/lib/examples/hashing.py
 
 """
 
-from krait.hashing import hash_extended
+from krait.introspect import hash_extended
 
 if __name__ == "__main__":
     from dataclasses import dataclass

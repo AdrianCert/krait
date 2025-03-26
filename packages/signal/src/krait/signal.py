@@ -1,5 +1,7 @@
 """
-This module implements a reactive property system inspired by modern web frameworks
+Module implements a reactive property system inspired by modern web frameworks.
+
+Module implements a reactive property system inspired by modern web frameworks
 such as SolidJS and ReactJS. It allows for the creation of properties that can react
 to changes in their dependencies, enabling automatic recalculation and caching of
 derived values. This is particularly useful for building dynamic, dependency-aware
@@ -26,8 +28,8 @@ Modules and Classes:
 - signal: A decorator and subclass of `SignaledProperty` for defining reactive properties
   within classes.
 
-Notes:
-------
+Notes
+-----
 - Limitations: This module have not yet support for handling mutable objects as signals.
     In case that a mutable object is used as a signal, the signal will not be triggered when
     the object is modified. This is a known limitation and will be addressed in future updates.
@@ -62,16 +64,23 @@ from krait import introspect
 __sentinel__ = object()
 
 
+class SignalContext(typing.NamedTuple):
+    instance: typing.Any = None
+    owner: typing.Optional[typing.Type] = None
+
+
 class BaseSignalHandler(abc.ABC):
+    context: SignalContext = SignalContext()
+
     @classmethod
     @abc.abstractmethod
     def accept(cls, value: typing.Any) -> bool: ...
 
     @abc.abstractmethod
-    def get_value(self, instance, owner) -> typing.Any: ...
+    def get_value(self) -> typing.Any: ...
 
     @abc.abstractmethod
-    def set_value(self, instance, value) -> bool: ...
+    def set_value(self, value) -> bool: ...
 
     @abc.abstractmethod
     def alter(self, **kwargs) -> None: ...
@@ -91,7 +100,14 @@ class BaseSignalHandler(abc.ABC):
         """
         self.owner: SignaledProperty = owner
 
-    def get(self, instance, owner):
+    @contextlib.contextmanager
+    def with_ref(self, instance, owner):
+        _old_context = self.context
+        self.context = SignalContext(instance, owner)
+        yield self
+        self.context = _old_context
+
+    def get(self):
         """
         Retrieve the value from the signal property.
 
@@ -107,11 +123,11 @@ class BaseSignalHandler(abc.ABC):
         Any
             The value of the signal property.
         """
-        return self.get_value(instance, owner)
+        return self.get_value()
 
-    def set(self, instance, value):
+    def set(self, value):
         """
-        Sets the value for the given instance and triggers alteration if the value is changed.
+        Set the value for the given instance and triggers alteration if the value is changed.
 
         Parameters
         ----------
@@ -123,10 +139,11 @@ class BaseSignalHandler(abc.ABC):
         Returns
         -------
         None
+
         """
-        altered = self.set_value(instance, value)
+        altered = self.set_value(value)
         if altered:
-            self.owner.alter(instance=instance)
+            self.owner.alter(instance=self.context.instance)
 
 
 class PrimitiveSignalHandler(BaseSignalHandler):
@@ -182,7 +199,7 @@ class PrimitiveSignalHandler(BaseSignalHandler):
         """
         return True
 
-    def get_value(self, instance, owner) -> typing.Any:
+    def get_value(self) -> typing.Any:
         """
         Retrieve the value managed by this signal handler.
 
@@ -200,7 +217,7 @@ class PrimitiveSignalHandler(BaseSignalHandler):
         """
         return self.original_value
 
-    def set_value(self, instance, value) -> bool:
+    def set_value(self, value) -> bool:
         """
         Set the value managed by this signal handler.
 
@@ -222,9 +239,9 @@ class PrimitiveSignalHandler(BaseSignalHandler):
             return diff_hash
         return True
 
-    def alter(self):
+    def alter(self, **kwargs):
         """
-        Placeholder method for altering signal data.
+        Is a placeholder method for altering signal data.
 
         This method is intended to be implemented with functionality
         to modify or process signal data in a specific manner.
@@ -232,8 +249,8 @@ class PrimitiveSignalHandler(BaseSignalHandler):
         Notes
         -----
         Currently, this method does not perform any operations.
+
         """
-        pass
 
 
 class DynamicSignalHandler(BaseSignalHandler):
@@ -275,11 +292,13 @@ class DynamicSignalHandler(BaseSignalHandler):
     def accept(cls, value: typing.Any) -> bool:
         return callable(value)
 
-    def get_value(self, instance, owner) -> typing.Any:
+    def get_value(self) -> typing.Any:
         cached_value = self._cache_get()
         if cached_value is not __sentinel__:
             return cached_value
-        computed_value = self._function.__get__(instance, owner)()
+        computed_value = self._function.__get__(
+            self.context.instance, self.context.owner
+        )()
         self._cache_set(computed_value)
         return computed_value
 
@@ -288,7 +307,7 @@ class DynamicSignalHandler(BaseSignalHandler):
             return self._cache_reset()
         self._cache_expire_notices.append(at)
 
-    def set_value(self, instance, value) -> bool:
+    def set_value(self, value) -> bool:
         raise AttributeError("Can't set dynamic signaled attribute")
 
 
@@ -300,6 +319,9 @@ SIGNAL_HANDLER_TYPES = (
 
 class SignaledProperty:
     """
+
+    Signal Property.
+
     Descriptor for signal-enabled properties that support dependency tracking and
     automatic updates.
 
@@ -317,6 +339,7 @@ class SignaledProperty:
         Dictionary mapping upstream signal IDs to SignaledProperty instances.
     __skip_mem_upstream_signals__ : bool
         Indicates whether upstream signal tracking should be skipped.
+
     """
 
     _handler_refs: weakref.WeakKeyDictionary
@@ -355,7 +378,6 @@ class SignaledProperty:
         """
         for signaled_type in SIGNAL_HANDLER_TYPES:
             if signaled_type.accept(target):
-                print(kwargs)
                 return typing.cast(
                     BaseSignalHandler, signaled_type(target, *args, **kwargs)
                 )
@@ -415,10 +437,6 @@ class SignaledProperty:
         self._target = target
         self._args = args
         self._kwargs = kwargs
-        self._handler = None
-
-        # if target is not __sentinel__:
-        #     self._handler = self.__peek_handler(target, *args, owner=self, **kwargs)
 
     def __call__(self, target) -> "SignaledProperty":
         """
@@ -477,9 +495,14 @@ class SignaledProperty:
             The owner class where the signal is defined.
 
         """
-        self.handler = self.resolve_signal_handler(instance, owner)
-        yield
-        self.handler = None
+        try:
+            handler = self.resolve_signal_handler(instance, owner)
+            with handler.with_ref(instance, owner) as handler:
+                yield handler
+        except Exception as exc:
+            # TODO: obfuscate the traceback to the user in order to avoid confusion
+            exc.with_traceback(None)
+            raise
         if not self._skip_mem_upstream_signals:
             self.__mem_upstream_signals()
             # TODO: need to be reviewed in case there are 2 signal
@@ -493,9 +516,16 @@ class SignaledProperty:
         self._ref_name = name
 
     def __get__(self, instance, owner):
-        with self.visit(instance, owner):
-            # TODO: obfuscate the traceback to the user in order to avoid confusion
-            return self.handler.get(instance, owner)
+        with self.visit(instance, owner) as handler:
+            return handler.get()
+
+    def get(self):
+        with self.visit(None, None) as handler:
+            return handler.get()
+
+    def set(self, value):
+        with self.visit(None, None) as handler:
+            return handler.set(value)
 
     def __set__(self, instance, value) -> None:
         if issubclass(type(value), SignaledProperty):
@@ -505,21 +535,16 @@ class SignaledProperty:
             # like the signal it's a mutable object and it's downstream attributes are not signals.
             # One example of this is a list or a dict, where the signal is the container
             return self.alter()
-        try:
-            with self.visit(instance, type(instance)):
-                stats = self.handler.set_value(instance, value)
-                if stats:
-                    self.alter()
-        except Exception as exc:
-            # obfuscate the traceback to the user in order to avoid confusion
-            exc.with_traceback(None)
-            raise
+        with self.visit(instance, type(instance)) as handler:
+            handler.set(value)
 
     def link_signal(self, other: "SignaledProperty"):
         other._upstream_signals.add(self)
 
     def altered(self):
-        return self._is_value_altered
+        pass
+        # return self.handler and self.handler
+        # return self._is_value_altered
 
     def alter(self, **kwargs):
         if self._is_value_altered:
@@ -545,32 +570,11 @@ class SignaledProperty:
 
 class signal(SignaledProperty):  # noqa: N801
     """
+    The signal property.
+
     The signal class is a decorator and descriptor used to define reactive properties in a class. It allows
     for automatic recalculation and caching of dependent properties when the base properties change. This
     is particularly useful for scenarios where properties depend on each other and need to be recalculated
     when their dependencies change.
+
     """
-
-
-def inspect(value, relative_frame=1):
-    # TODO: descriptor instance is shared across all instances
-    introspect.lookup4descriptor(relative_frame=relative_frame + 1)
-    import ast
-
-    frame = stack()[1]
-
-    call_line = frame.code_context[0][
-        frame.positions.col_offset : frame.positions.end_col_offset
-    ]
-
-    tree = ast.parse(call_line)
-    stmt = tree.body[0]
-
-    if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-        call_stmt = stmt.value
-        if call_stmt.args:
-            caller_arg = call_stmt.args[0]
-            var_owner = caller_arg.value
-            var_attribute = caller_arg.attr
-            print(var_owner, var_attribute)
-        return

@@ -1,0 +1,36 @@
+import typing
+
+T = typing.TypeVar("T")
+
+class signal:  # noqa: N801
+    # Handler: DynamicSignaledType (Directly used with a callable)
+    @typing.overload
+    def __init__(
+        self,
+        original_value: typing.Callable[..., T],
+        *args: typing.Any,
+        cache_control: int = 0,
+    ) -> None: ...
+
+    # Handler: DynamicSignaledType (Used indirectly from a decorator)
+    @typing.overload
+    def __init__(self, cache_control: int = 0) -> None: ...
+
+    # Handler: BaseSignalHandler (Used directly with a value)
+    @typing.overload
+    def __init__(
+        self,
+        original_value: typing.Any,
+        use_hashing: bool = False,
+    ) -> None: ...
+
+    # Final generic constructor as a fallback
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None: ...
+    @typing.overload
+    def __call__(self, original_value: typing.Callable[..., T]) -> "signal": ...
+    def __call__(self, original_value: typing.Any) -> "signal": ...
+    def __get__(self, instance: typing.Any, owner: typing.Any) -> typing.Any: ...
+    def __set__(self, instance: typing.Any, value: typing.Any) -> None: ...
+    def __delete__(self, instance: typing.Any) -> None: ...
+    def __set_name__(self, owner: typing.Any, name: str) -> None: ...
+    def __repr__(self) -> str: ...

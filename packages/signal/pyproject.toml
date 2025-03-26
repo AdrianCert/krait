@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "krait-signal"
 version = "0.1.0"
@@ -6,12 +10,8 @@ authors = [
     { name = "Panaintescu Adrian Valentin", email = "adrian.cert@gmail.com" },
 ]
 dependencies = []
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">= 3.8"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -19,5 +19,101 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/krait"]
 
-[tool.ruff.lint]
-extend-select = ["C", "N", "SIM", "PTH", "I", "PL", "FURB"]
+[dependency-groups]
+ruff = ["ruff>=0.10.0"]
+coverage = ["coverage[toml]", "covdefaults"]
+dev = [{ include-group = "ruff" }, "pre-commit>=2.21.0", "tox>=4.23.2"]
+krait-siblings = ["krait-lib@file:../lib"]
+test = [
+    { include-group = "krait-siblings" },
+    { include-group = "coverage" },
+    "mock",
+    "pytest",
+    "pytest-cov",
+    "hypothesis",
+]
+
+[tool.coverage]
+html.show_contexts = true
+html.skip_covered = false
+run.parallel = true
+run.omit = [
+    "tests/*.py",
+    # add others
+]
+run.plugins = [
+    # all plugins
+    "covdefaults",
+]
+
+[tool.ruff]
+lint.pydocstyle.convention = "numpy"
+lint.extend-select = ["C", "D", "FURB", "I", "N", "PL", "PTH", "SIM"]
+lint.extend-ignore = [
+    "D100", # Missing docstring in public module
+    "D101", # Missing docstring in public class
+    "D102", #
+    "D103", # Missing docstring in public function
+    "D105",
+    "D401",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"] # No need to docstring on test files
+
+[tool.tox]
+requires = ["tox>=4.23.2", "tox-uv>=1.13"]
+isolated_build = true
+env_list = ["ruff", "cov-report", "py38", "py39", "py311", "py312", "py313"]
+
+[tool.tox.env_run_base]
+commands = [
+    [
+        "coverage",
+        "run",
+        "--context",
+        "{env_name}",
+        "-m",
+        "pytest",
+        "--doctest-glob=README.md",
+        "--junit-xml=.build/tests/pytest_{env_name}_junit.xml",
+    ],
+]
+set_env.COVERAGE_FILE = "{toxworkdir}/.coverage"
+dependency_groups = ["test"]
+# package = "wheel"
+# wheel_build_env = ".pkg"
+
+[tool.tox.env.ruff]
+recreate = false
+skip_install = true
+dependency_groups = ["ruff"]
+commands = [
+    # commands
+    ["ruff", "format", "--check", "."],
+    ["ruff", "check", "."],
+]
+
+[tool.tox.env.cov-report]
+parallel_show_output = true
+recreate = false
+set_env.COVERAGE_FILE = "{toxworkdir}/.coverage"
+skip_install = true
+dependency_groups = ["coverage"]
+depends = ["py38", "py39", "py311", "py312", "py313"]
+commands = [
+    [
+        "coverage",
+        "combine",
+    ],
+    [
+        "coverage",
+        "html",
+        "-d",
+        ".build/coverage",
+    ],
+    [
+        "coverage",
+        "report",
+    ],
+]
