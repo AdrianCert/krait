@@ -9,6 +9,13 @@ description = "A versatile Python package for managing and organizing various ut
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"
+authors = [
+    { name = "Adrian Valentin Panaintescu", email = "adrian.cert@gmail.com" },
+]
+maintainers = [
+    { name = "Adrian Valentin Panaintescu", email = "adrian.cert@gmail.com" },
+    { name = "Vlad Craciun", email = "craciun.vlad@yahoo.ie" },
+]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.8",
@@ -44,6 +51,7 @@ dev = [
 test = [
     "covdefaults>=2.3",
     "distlib>=0.3.9",
+    "hypothesis>=6.113.0",
     "pytest>=8.3.4",
     "pytest-cov>=5",
     "pytest-mock>=3.14",

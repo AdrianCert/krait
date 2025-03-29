@@ -8,4 +8,5 @@ wheels/
 
 # venv
 .venv
-poc
+.build
+.coverage

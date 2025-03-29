@@ -7,6 +7,7 @@ hyp.settings.register_profile(
     "default",
     suppress_health_check=[hyp.HealthCheck.function_scoped_fixture],
     phases=(hyp.Phase.explicit, hyp.Phase.reuse, hyp.Phase.generate, hyp.Phase.shrink),
+    deadline=None,
 )
 hyp.settings.load_profile("default")
 

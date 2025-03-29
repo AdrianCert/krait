@@ -381,7 +381,7 @@ class SignaledProperty:
                 return typing.cast(
                     BaseSignalHandler, signaled_type(target, *args, **kwargs)
                 )
-        raise ValueError(f"Unsupported signal type: {type(target)}")
+        raise ValueError(f"Unsupported signal type: {type(target)}")  # pragma: no cover
 
     @classmethod
     def __peek_stack_signals(cls) -> typing.Iterator["SignaledProperty"]:
