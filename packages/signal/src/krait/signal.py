@@ -57,7 +57,6 @@ import contextlib
 import datetime
 import typing
 import weakref
-from inspect import stack
 
 from krait import introspect
 
@@ -317,6 +316,37 @@ SIGNAL_HANDLER_TYPES = (
 )
 
 
+class SignalLinkLookup:
+    from contextvars import ContextVar
+
+    signals_stack: ContextVar[typing.List["SignaledProperty"]] = ContextVar(
+        "signals_stack", default=[]
+    )
+
+    def push(self, item: "SignaledProperty"):
+        self.signals_stack.set(self.signals_stack.get() + [item])
+
+    def pop(self, /, default=__sentinel__):
+        stack = self.signals_stack.get()
+        if not stack:
+            if default is __sentinel__:
+                raise KeyError("stack::signal empty in current context")
+            return default
+        *stack, value = stack
+        self.signals_stack.set(stack)
+        return stack
+
+    def get(self, /, default=None):
+        stack = self.signals_stack.get()
+        return stack[-1] if stack else None
+
+    def __call__(self, signal: "SignaledProperty"):
+        with contextlib.suppress(Exception):
+            other: SignaledProperty = self.get()
+            other.link_signal_used(signal)
+        self.push(signal)
+
+
 class SignaledProperty:
     """
 
@@ -350,6 +380,7 @@ class SignaledProperty:
     _ref_name: str = ""
     _upstream_signals: typing.Set["SignaledProperty"]
     _downstream_signals: typing.Set["SignaledProperty"]
+    deps_lookup_handler: typing.Optional[SignalLinkLookup]
     handler: BaseSignalHandler
 
     @classmethod
@@ -383,38 +414,6 @@ class SignaledProperty:
                 )
         raise ValueError(f"Unsupported signal type: {type(target)}")  # pragma: no cover
 
-    @classmethod
-    def __peek_stack_signals(cls) -> typing.Iterator["SignaledProperty"]:
-        """
-        Peek into the current call stack to find active signal instances.
-
-        Returns
-        -------
-        typing.Iterator[SignaledProperty]
-            An iterable of active signal instances.
-        """
-        for frame in stack():
-            if frame.function == "__get__":
-                ref_signal: typing.Union[SignaledProperty, typing.Any] = (
-                    frame.frame.f_locals.get("self")
-                )
-                if isinstance(ref_signal, cls):
-                    yield ref_signal
-
-    @classmethod
-    def __mem_upstream_signals(cls):
-        """
-        Track upstream signal dependencies.
-
-        Returns
-        -------
-        Iterable[SignaledProperty]
-            An iterable of upstream signal dependencies.
-        """
-        with contextlib.suppress(StopIteration, ValueError):
-            this, other, *_ = cls.__peek_stack_signals()
-            other.link_signal(this)
-
     def __init__(
         self, target=__sentinel__, *args, shared: bool = False, **kwargs
     ) -> None:
@@ -431,12 +430,13 @@ class SignaledProperty:
             Keyword arguments for the signal handler.
         """
         self._upstream_signals = set()
-        self._downstream_signals = set()
+        self._downstream_signals = set()  # TODO: check if we still used
         self._handler_refs = weakref.WeakKeyDictionary()
         self._shared = shared
         self._target = target
         self._args = args
         self._kwargs = kwargs
+        self.deps_lookup_handler = SignalLinkLookup()
 
     def __call__(self, target) -> "SignaledProperty":
         """
@@ -495,6 +495,9 @@ class SignaledProperty:
             The owner class where the signal is defined.
 
         """
+        with contextlib.suppress(Exception):
+            # Lookup for deps
+            self.deps_lookup_handler(self)
         try:
             handler = self.resolve_signal_handler(instance, owner)
             with handler.with_ref(instance, owner) as handler:
@@ -503,14 +506,11 @@ class SignaledProperty:
             # TODO: obfuscate the traceback to the user in order to avoid confusion
             exc.with_traceback(None)
             raise
-        if not self._skip_mem_upstream_signals:
-            self.__mem_upstream_signals()
-            # TODO: need to be reviewed in case there are 2 signal
-            # deactivate for the moment
-            # self.__skip_mem_upstream_signals__ = True
 
-    def set_skip_mem_upstream_signals(self, value: bool):
-        self._skip_mem_upstream_signals = bool(value)
+        with contextlib.suppress(Exception):
+            self.deps_lookup_handler.pop()
+            # delete since we don't need anymore
+            self.deps_lookup_handler = None
 
     def __set_name__(self, owner, name):
         self._ref_name = name
@@ -538,8 +538,15 @@ class SignaledProperty:
         with self.visit(instance, type(instance)) as handler:
             handler.set(value)
 
-    def link_signal(self, other: "SignaledProperty"):
-        other._upstream_signals.add(self)
+    def link_signal_used(self, other: "SignaledProperty", reflexive: bool = True):
+        self._downstream_signals.add(other)
+        if reflexive:
+            other.link_signal_used_by(self, False)
+
+    def link_signal_used_by(self, other: "SignaledProperty", reflexive: bool = True):
+        self._upstream_signals.add(other)
+        if reflexive:
+            other.link_signal_used(self, False)
 
     def altered(self):
         pass
