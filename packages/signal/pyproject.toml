@@ -62,10 +62,10 @@ lint.extend-select = ["C", "D", "FURB", "I", "N", "PL", "PTH", "SIM"]
 lint.extend-ignore = [
     "D100", # Missing docstring in public module
     "D101", # Missing docstring in public class
-    "D102", #
+    "D102", # Missing docstring in public method
     "D103", # Missing docstring in public function
-    "D105",
-    "D401",
+    "D105", # Missing docstring in magic method
+    "D401", # First line should be in imperative mood
 ]
 
 [tool.ruff.lint.per-file-ignores]
