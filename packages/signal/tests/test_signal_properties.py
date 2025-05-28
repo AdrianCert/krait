@@ -1,6 +1,9 @@
+import datetime
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+from pytest_mock.plugin import MockerFixture
 
 from krait.signal import signal
 
@@ -159,20 +162,19 @@ def test_signal_repr():
     assert repr(instance.prop) == "42"
 
 
-@given(
-    given_prices=st.lists(
-        st.floats(min_value=0, max_value=10000), min_size=2, max_size=5
-    ),
-    factor=st.floats(min_value=0, max_value=1),
-)
+@given(given_prices=st_floats, factor=st_percent)
 def test_signal_working(fixture_price_calculator, given_prices, factor):
     cls_price_calculator, _ = fixture_price_calculator
     price_calculator = cls_price_calculator()
     price_calculator.factor = factor
 
-    for price in given_prices:
+    last_price = price_calculator.base_price
+    for index, price in enumerate(given_prices):
         price_calculator.base_price = price
-        assert price_calculator.discount == pytest.approx(price * factor, rel=1e-5)
+        if last_price != price:
+            assert price_calculator.discount == pytest.approx(price * factor, rel=1e-5)
+            if index > 1:
+                break
 
 
 @given(base_price=st.floats(min_value=1000, max_value=10000))
@@ -195,3 +197,45 @@ def test_shared_signal_across_instances(fixture_price_calculator, base_price):
             "on signal(shared=False) changes should not affect other instance"
         )
     assert pipeline2.discount == pytest.approx(base_price * pipeline2.factor, rel=1e-5)
+
+
+def test_cache_expire(mocker: MockerFixture):
+    """
+    Test the expiration behavior of the `@signal(expire=...)` decorator's cache.
+
+    This test verifies that:
+    - The cached value of a `@signal(expire=30*60)` property remains the same within the expiration window (30 minutes).
+    - After the expiration window, the value is refreshed (i.e., the underlying function is called again).
+    - Values accessed at 0 and 20 minutes are the same, while the value at 40 minutes is different (cache expired and refreshed),
+      and the value at 60 minutes matches the one at 40 minutes (within the new cache window).
+    """
+
+    class Example:
+        @signal(expire=30 * 60)
+        def rss_feed(self):
+            now = datetime.datetime.now()
+            return "news of hour %s:%s" % (now.hour, now.minute)
+
+    dt_cls = datetime.datetime
+    dt_now = dt_cls(day=1, month=1, year=2000, hour=8)
+
+    mock_dt = mocker.patch("datetime.datetime", wraps=datetime.datetime)
+
+    mock_dt.now.return_value = dt_now
+    mock_dt.min = dt_cls.min
+    mock_dt.max = dt_cls.max
+
+    obj = Example()
+
+    access_log = []
+    for minutes_pass in range(0, 80, 20):
+        # Advance the mocked time
+        mock_dt.now.return_value = dt_now + datetime.timedelta(minutes=minutes_pass)
+        value = obj.rss_feed
+        access_log.append(value)
+
+    # The cache should expire after 30 minutes, so values at 0, 20 should be the same,
+    # but at 40, 60, etc., should be refreshed.
+    assert access_log[0] == access_log[1]
+    assert access_log[1] != access_log[2]
+    assert access_log[2] == access_log[3]

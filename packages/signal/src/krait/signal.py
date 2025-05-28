@@ -242,7 +242,7 @@ class DynamicSignalHandler(BaseSignalHandler):
         )
 
     def _cache_get(self) -> typing.Any:
-        if self._cache_expire_at > datetime.datetime.now():
+        if self._cache_expire_at <= datetime.datetime.now():
             self._cache_reset()
         return self._cache_value
 
@@ -411,7 +411,6 @@ class SignaledProperty:
         self._downstream_signals = set()  # TODO: check if we still used
         self._handler_refs = weakref.WeakKeyDictionary()
         self.shared = shared
-        self.handler = self.__peek_handler(origin)
         self._hkw = {"origin": origin, "owner": self, **kwargs}
 
     def __call__(self, target) -> "SignaledProperty":
@@ -458,12 +457,24 @@ class SignaledProperty:
 
     @contextlib.contextmanager
     def visit_on_setup(self, instance, owner):
+        self.handler = self.__peek_handler(self._hkw["origin"])
+        with self.visit_on_linking(instance, owner) as handler:
+            yield handler
+        self.visit = self.visit_on_linking
+
+    @contextlib.contextmanager
+    def visit_on_linking(self, instance, owner):
         picker = SignalLinkPicker()
         picker(self)
         with self.visit_on_call(instance, owner) as handler:
             yield handler
         picker.pop()
-        self.visit = self.visit_on_call
+        # need to find a way to optimize the linking signals
+        # given A, B, C signals A -> B, C -> B
+        # when any link done we disable with line bellow
+        # but next time A/C call B and B does not report
+        # It's need to come up with a solution to reactivate B
+        # self.visit = self.visit_on_call
 
     visit = visit_on_setup
 
