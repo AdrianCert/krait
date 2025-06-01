@@ -161,6 +161,10 @@ def test_signal_repr():
     instance = Example()
     assert repr(instance.prop) == "42"
 
+    prop_signal = Example.__dict__["prop"]
+    repr_prop = repr(prop_signal)
+    assert repr_prop.startswith("signal:prop")
+
 
 @given(given_prices=st_floats, factor=st_percent)
 def test_signal_working(fixture_price_calculator, given_prices, factor):
@@ -239,3 +243,51 @@ def test_cache_expire(mocker: MockerFixture):
     assert access_log[0] == access_log[1]
     assert access_log[1] != access_log[2]
     assert access_log[2] == access_log[3]
+
+
+@given(number=st_float)
+def test_signal_dynamic_set_raises_attributeerror(number):
+    class MyClass:
+        @signal
+        def foo(self):
+            return number
+
+    inst = MyClass()
+    # Should raise AttributeError when trying to set a dynamic signal
+    with pytest.raises(AttributeError, match="Can't set dynamic signaled attribute"):
+        inst.foo = number
+
+
+def test_signal_alter_at_from_other_cache_expire(mocker: MockerFixture):
+    counter = 0
+
+    class Example:
+        @signal(expire=30 * 60)
+        def foo(self):
+            return 1
+
+        @signal
+        def bar(self):
+            nonlocal counter
+            counter += 1
+            return self.foo + counter
+
+    dt_cls = datetime.datetime
+    dt_now = dt_cls(day=1, month=1, year=2000, hour=8)
+
+    mock_dt = mocker.patch("datetime.datetime", wraps=datetime.datetime)
+
+    mock_dt.now.return_value = dt_now
+    mock_dt.min = dt_cls.min
+    mock_dt.max = dt_cls.max
+
+    obj = Example()
+
+    access_log = []
+    for minutes_pass in range(0, 60, 20):
+        # Advance the mocked time
+        mock_dt.now.return_value = dt_now + datetime.timedelta(minutes=minutes_pass)
+        value = obj.bar
+        access_log.append(value)
+
+    assert access_log == [2, 2, 3]

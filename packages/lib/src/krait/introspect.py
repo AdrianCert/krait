@@ -167,6 +167,10 @@ def kind4function(function):
         return "staticmethod"
 
 
+def repr4cls(cls):
+    return f"{cls.__module__}.{cls.__qualname__}"
+
+
 def lookup4mro(cls, name, default):
     for base in cls.__mro__:
         _vars = vars(base)

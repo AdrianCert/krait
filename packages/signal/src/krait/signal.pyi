@@ -3,32 +3,30 @@ import typing
 T = typing.TypeVar("T")
 
 class signal:  # noqa: N801
-    # Handler: DynamicSignaledType (Directly used with a callable)
+    # Handler: DynamicSignalHandler
     @typing.overload
     def __init__(
         self,
-        original_value: typing.Callable[..., T],
-        *args: typing.Any,
-        cache_control: int = 0,
+        origin: typing.Optional[typing.Callable[..., T]] = None,
+        /,
+        shared: bool = False,
+        expire: int = 0,
+        **kwargs,
     ) -> None: ...
 
-    # Handler: DynamicSignaledType (Used indirectly from a decorator)
-    @typing.overload
-    def __init__(self, cache_control: int = 0) -> None: ...
-
-    # Handler: BaseSignalHandler (Used directly with a value)
+    # Handler: PrimitiveSignalHandler
     @typing.overload
     def __init__(
         self,
-        original_value: typing.Any,
-        use_hashing: bool = False,
+        origin: typing.Optional[T] = None,
+        /,
+        use_hashing: typing.Union[bool, typing.Callable[..., bool]] = True,
+        **kwargs,
     ) -> None: ...
-
-    # Final generic constructor as a fallback
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None: ...
     @typing.overload
-    def __call__(self, original_value: typing.Callable[..., T]) -> "signal": ...
-    def __call__(self, original_value: typing.Any) -> "signal": ...
+    def __call__(self, origin: typing.Callable[..., T]) -> "signal": ...
+    @typing.overload
+    def __call__(self, original_value: T) -> "signal": ...
     def __get__(self, instance: typing.Any, owner: typing.Any) -> typing.Any: ...
     def __set__(self, instance: typing.Any, value: typing.Any) -> None: ...
     def __delete__(self, instance: typing.Any) -> None: ...

@@ -129,7 +129,11 @@ class BaseSignalHandler(abc.ABC):
         """
         altered = self.set(value)
         if altered:
-            self.owner.alter(context=self.context)
+            self.notice_alter()
+
+    def notice_alter(self, **kw):
+        context = kw.pop("context", self.context)
+        self.owner.alter(context=context, **kw)
 
 
 class PrimitiveSignalHandler(BaseSignalHandler):
@@ -252,7 +256,7 @@ class DynamicSignalHandler(BaseSignalHandler):
             self._cache_expire_at = datetime.datetime.now() + datetime.timedelta(
                 seconds=self._cache_expire
             )
-            self.owner.alter(at=self._cache_expire_at)
+            self.notice_alter(at=self._cache_expire_at)
 
     @classmethod
     def accept(cls, value: typing.Any) -> bool:
@@ -276,7 +280,7 @@ class DynamicSignalHandler(BaseSignalHandler):
             return self._cache_reset()
         if at < self._cache_expire_at:
             self._cache_expire_at = at
-            self.owner.alter(at=at)
+            self.notice_alter(at=at)
 
     def set(self, value) -> bool:
         raise AttributeError("Can't set dynamic signaled attribute")
@@ -300,7 +304,7 @@ class SignalLinkPicker:
 
     def pop(self, /, default=__sentinel__):
         stack = self.signals_stack.get()
-        if not stack:
+        if not stack:  # pragma: no cover
             if default is __sentinel__:
                 raise KeyError("stack::signal empty in current context")
             return default
@@ -321,53 +325,27 @@ class SignalLinkPicker:
 
 class SignaledProperty:
     """
-
     Signal Property.
 
     Descriptor for signal-enabled properties that support dependency tracking and
     automatic updates.
 
-    Attributes
-    ----------
-    __original_value__ : Any
-        The original value of the property.
-    __altered__ : bool
-        Indicates whether the property value has been altered.
-    __handler__ : BaseSignalHandler
-        The signal handler managing this property.
-    __ref_name__ : str
-        The name of the property as defined in the owner class.
-    __upstream_signals__ : dict
-        Dictionary mapping upstream signal IDs to SignaledProperty instances.
-
     """
 
-    # __slots__  = (
-    #     "handler", "name", "_link_picker"
-    # )
+    __slots__ = (
+        "handler",
+        "name",
+        "shared",
+        "owner",
+        "_handler_refs",
+        "_upstream_signals",
+        "_downstream_signals",
+        "_hkw",
+    )
 
     handler: typing.Type[BaseSignalHandler]
     shared: bool
     name: str
-    _handler_refs: weakref.WeakKeyDictionary[typing.Any, BaseSignalHandler]
-
-    _original_value: typing.Any = __sentinel__
-    _is_value_altered: bool = False
-    _upstream_signals: typing.Set["SignaledProperty"]
-    _downstream_signals: typing.Set["SignaledProperty"]
-
-    # seems to be a bad idea
-    # def __new__(cls, *args, **kwargs):
-    #     if introspect.is_call_decorator():
-    #         return cls.decorator(*args, **kwargs)
-    #     return super().__new__(cls)
-
-    @classmethod
-    def decorator(cls, *args, **kwargs):
-        def signal_caller(fn):
-            return cls(fn, *args, **kwargs)
-
-        return signal_caller
 
     @classmethod
     def __peek_handler(cls, target) -> typing.Type[BaseSignalHandler]:
@@ -407,9 +385,13 @@ class SignaledProperty:
         kwargs : dict
             Keyword arguments for the signal handler.
         """
-        self._upstream_signals = set()
-        self._downstream_signals = set()  # TODO: check if we still used
-        self._handler_refs = weakref.WeakKeyDictionary()
+        self._upstream_signals: weakref.WeakSet["SignaledProperty"] = weakref.WeakSet()
+        self._downstream_signals: weakref.WeakSet["SignaledProperty"] = (
+            weakref.WeakSet()
+        )
+        self._handler_refs: weakref.WeakKeyDictionary[typing.Any, BaseSignalHandler] = (
+            weakref.WeakKeyDictionary()
+        )
         self.shared = shared
         self._hkw = {"origin": origin, "owner": self, **kwargs}
 
@@ -442,7 +424,17 @@ class SignaledProperty:
         str
             String representation of the property.
         """
-        return f"signal:{self.name}({repr(self._original_value)})"
+        return "signal:{name} {{ {fields} }}".format(
+            name=self.name,
+            fields=", ".join(
+                f"{k}: {v}"
+                for k, v in {
+                    "shared": self.shared,
+                    "handler": introspect.repr4cls(self.handler),
+                    "owner": introspect.repr4cls(self.owner),
+                }.items()
+            ),
+        )
 
     def resolve_signal_handler(self, instance, owner=None):
         ref = owner if self.shared or not instance else instance
@@ -500,6 +492,7 @@ class SignaledProperty:
 
     def __set_name__(self, owner, name):
         self.name = name
+        self.owner = owner
 
     def __get__(self, instance, owner):
         with self.visit(instance, owner) as handler:
