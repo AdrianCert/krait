@@ -430,8 +430,8 @@ class SignaledProperty:
                 f"{k}: {v}"
                 for k, v in {
                     "shared": self.shared,
-                    "handler": introspect.repr4cls(self.handler),
                     "owner": introspect.repr4cls(self.owner),
+                    "handler": introspect.repr4cls(self.handler),
                 }.items()
             ),
         )
@@ -499,10 +499,10 @@ class SignaledProperty:
             return handler.get_value()
 
     def get(self):
-        return self.__get__(None, None)
+        return self.__get__(None, SignaledProperty)
 
     def set(self, value):
-        return self.__set__(None, value)
+        return self.__set__(SignaledProperty, value)
 
     def __set__(self, instance, value) -> None:
         # if issubclass(type(value), SignaledProperty):
