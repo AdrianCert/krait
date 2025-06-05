@@ -4,7 +4,7 @@ requires = ["hatchling"]
 
 [project]
 name = "krait-kit"
-version = "25.2.1"
+version = "25.6.0"
 description = "A versatile Python package for managing and organizing various utilities and tools, including logging, packaging, path handling, and signaled properties."
 readme = "README.md"
 license = "MIT"
