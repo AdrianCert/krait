@@ -18,7 +18,8 @@ repos:
     rev: "v0.23"
     hooks:
       - id: validate-pyproject
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.6.3
-    hooks:
-      - id: uv-lock
+  # TODO: krait-siblings = ["krait-lib@file:../lib"] create issues
+  # - repo: https://github.com/astral-sh/uv-pre-commit
+  #   rev: 0.6.3
+  #   hooks:
+  #     - id: uv-lock

@@ -1,5 +1,7 @@
 """
-This module implements a reactive property system inspired by modern web frameworks
+Module implements a reactive property system inspired by modern web frameworks.
+
+Module implements a reactive property system inspired by modern web frameworks
 such as SolidJS and ReactJS. It allows for the creation of properties that can react
 to changes in their dependencies, enabling automatic recalculation and caching of
 derived values. This is particularly useful for building dynamic, dependency-aware
@@ -26,8 +28,8 @@ Modules and Classes:
 - signal: A decorator and subclass of `SignaledProperty` for defining reactive properties
   within classes.
 
-Notes:
-------
+Notes
+-----
 - Limitations: This module have not yet support for handling mutable objects as signals.
     In case that a mutable object is used as a signal, the signal will not be triggered when
     the object is modified. This is a known limitation and will be addressed in future updates.
@@ -50,17 +52,91 @@ This module is suitable for scenarios requiring state management, derived comput
 or reactive programming principles in Python.
 """
 
+import abc
+import contextlib
 import datetime
-import inspect
 import typing
-from contextlib import contextmanager
+import weakref
 
-from krait.hashing import hash_extended
+from krait import introspect
 
 __sentinel__ = object()
 
 
-class BaseSignalHandler:
+class SignalContext(typing.NamedTuple):
+    instance: typing.Any = None
+    owner: typing.Optional[typing.Type] = None
+
+
+class BaseSignalHandler(abc.ABC):
+    @classmethod
+    @abc.abstractmethod
+    def accept(cls, value: typing.Any) -> bool: ...
+
+    @abc.abstractmethod
+    def get(self) -> typing.Any: ...
+
+    @abc.abstractmethod
+    def set(self, value) -> bool: ...
+
+    @abc.abstractmethod
+    def alter(self, **kwargs) -> None: ...
+
+    def __init__(
+        self,
+        /,
+        owner: "SignaledProperty",
+        context: typing.Optional[SignalContext] = None,
+        **kwargs,
+    ) -> None:
+        """
+        Initialize a BaseSignalHandler instance.
+
+        Parameters
+        ----------
+        owner : SignaledProperty
+            The signaled property witch own this
+        context: typing.Optional[SignalContext]
+            The context in where signal were called
+        """
+        self.context = context
+        self.owner: SignaledProperty = owner
+
+    def get_value(self):
+        """
+        Retrieve the value from the signal property.
+
+        Returns
+        -------
+        Any
+            The value of the signal property.
+        """
+        return self.get()
+
+    def set_value(self, value):
+        """
+        Set the value for the given instance and triggers alteration if the value is changed.
+
+        Parameters
+        ----------
+        value : any
+            The new value to set.
+
+        Returns
+        -------
+        None
+
+        """
+        altered = self.set(value)
+        if altered:
+            self.notice_alter()
+
+    def notice_alter(self, **kw):
+        context = kw.pop("context", self.context)
+        self.owner.alter(context=context, **kw)
+
+
+class PrimitiveSignalHandler(BaseSignalHandler):
     """
     Base class for signal handlers.
 
@@ -71,44 +147,30 @@ class BaseSignalHandler:
     """
 
     original_value: typing.Any
-    property: "SignaledProperty"
 
-    def __init__(self, original_value, *args, hashing=True, **kwargs) -> None:
+    def __init__(
+        self,
+        origin,
+        use_hashing: typing.Union[bool, typing.Callable[..., bool]] = True,
+        **kwargs,
+    ) -> None:
         """
         Initialize a BaseSignalHandler instance.
 
         Parameters
         ----------
-        original_value : Any
+        origin : Any
             The original value of the signal.
         """
-        self.original_value = original_value
+        super().__init__(**kwargs)
+        self.original_value = origin
         self.hashing = (
-            hashing and (hashing if callable(hashing) else hash_extended) or None
+            use_hashing
+            and (use_hashing if callable(use_hashing) else introspect.hash4any)
+            or None
         )
-        self.original_hash = self.hashing and self.hashing(original_value) or None
-        self.property = None
-
-    @contextmanager
-    def with_property(
-        self,
-        prop: "SignaledProperty",
-    ) -> typing.Generator[None, None, None]:
-        """
-        Context manager for setting the property instance.
-
-        Parameters
-        ----------
-        prop : SignaledProperty
-            The signal property instance.
-
-        Yields
-        ------
-        None
-        """
-        self.property = prop
-        yield
-        self.property = None
+        self.use_hashing = use_hashing and True or False
+        self.original_hash = self.hashing and self.hashing(origin) or None
 
     @classmethod
     def accept(cls, value: typing.Any) -> bool:
@@ -127,13 +189,7 @@ class BaseSignalHandler:
         """
         return True
 
-    def alter(self) -> None:
-        """
-        Trigger an alteration in the signal handler.
-        """
-        pass
-
-    def get_value(self, instance, owner) -> typing.Any:
+    def get(self) -> typing.Any:
         """
         Retrieve the value managed by this signal handler.
 
@@ -151,7 +207,7 @@ class BaseSignalHandler:
         """
         return self.original_value
 
-    def set_value(self, instance, value) -> bool:
+    def set(self, value) -> bool:
         """
         Set the value managed by this signal handler.
 
@@ -173,75 +229,126 @@ class BaseSignalHandler:
             return diff_hash
         return True
 
-    def get(self, prop, instance, owner):
-        """
-        Retrieve the value from the signal property.
+    def alter(self, **kwargs): ...
 
-        Parameters
-        ----------
-        prop : SignaledProperty
-            The signal property instance.
-        instance : Any
-            The instance of the class where the signal is defined.
-        owner : type
-            The owner class where the signal is defined.
 
-        Returns
-        -------
-        Any
-            The value of the signal property.
-        """
-        with self.with_property(prop):
-            return self.get_value(instance, owner)
+class DynamicSignalHandler(BaseSignalHandler):
+    def __init__(self, origin, expire: int = 0, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._function = origin
+        self._cache_expire = expire
+        self._cache_reset()
+
+    def _cache_reset(self):
+        self._cache_value = __sentinel__
+        self._cache_expire_at = (
+            datetime.datetime.min if self._cache_expire else datetime.datetime.max
+        )
+
+    def _cache_get(self) -> typing.Any:
+        if self._cache_expire_at <= datetime.datetime.now():
+            self._cache_reset()
+        return self._cache_value
+
+    def _cache_set(self, value):
+        self._cache_value = value
+        if self._cache_expire:
+            self._cache_expire_at = datetime.datetime.now() + datetime.timedelta(
+                seconds=self._cache_expire
+            )
+            self.notice_alter(at=self._cache_expire_at)
+
+    @classmethod
+    def accept(cls, value: typing.Any) -> bool:
+        return callable(value)
+
+    def get(self) -> typing.Any:
+        cached_value = self._cache_get()
+        if cached_value is not __sentinel__:
+            return cached_value
+        computed_value = (
+            self.context
+            and self._function.__get__(self.context.instance, self.context.owner)
+            or self._function
+        )()
+
+        self._cache_set(computed_value)
+        return computed_value
+
+    def alter(self, at: typing.Optional[datetime.datetime] = None, **kwargs):
+        if not at:
+            return self._cache_reset()
+        if at < self._cache_expire_at:
+            self._cache_expire_at = at
+            self.notice_alter(at=at)
+
+    def set(self, value) -> bool:
+        raise AttributeError("Can't set dynamic signaled attribute")
+
+
+SIGNAL_HANDLER_TYPES = (
+    DynamicSignalHandler,
+    PrimitiveSignalHandler,
+)
+
+
+class SignalLinkPicker:
+    from contextvars import ContextVar
+
+    signals_stack: ContextVar[typing.List["SignaledProperty"]] = ContextVar(
+        "signals_stack", default=[]
+    )
+
+    def push(self, item: "SignaledProperty"):
+        self.signals_stack.set(self.signals_stack.get() + [item])
+
+    def pop(self, /, default=__sentinel__):
+        stack = self.signals_stack.get()
+        if not stack:  # pragma: no cover
+            if default is __sentinel__:
+                raise KeyError("stack::signal empty in current context")
+            return default
+        *stack, value = stack
+        self.signals_stack.set(stack)
+        return stack
+
+    def get(self, /, default=None):
+        stack = self.signals_stack.get()
+        return stack[-1] if stack else None
+
+    def __call__(self, signal: "SignaledProperty"):
+        with contextlib.suppress(Exception):
+            other: SignaledProperty = self.get()
+            other.link_signal_used(signal)
+        self.push(signal)
 
 
 class SignaledProperty:
     """
+    Signal Property.
+
     Descriptor for signal-enabled properties that support dependency tracking and
     automatic updates.
 
-    Attributes
-    ----------
-    __original_value__ : Any
-        The original value of the property.
-    __altered__ : bool
-        Indicates whether the property value has been altered.
-    __handler__ : BaseSignalHandler
-        The signal handler managing this property.
-    __ref_name__ : str
-        The name of the property as defined in the owner class.
-    __upstream_signals__ : dict
-        Dictionary mapping upstream signal IDs to SignaledProperty instances.
-    __skip_mem_upstream_signals__ : bool
-        Indicates whether upstream signal tracking should be skipped.
     """
 
-    __original_value__: typing.Any = __sentinel__
-    __altered__: bool = False
-    __handler__: typing.Union[
-        BaseSignalHandler, typing.Tuple[typing.Tuple, typing.Dict]
-    ] = None
-    __ref_name__: str = ""
-    __upstream_signals__: typing.Dict[int, "SignaledProperty"] = {}
-    __skip_mem_upstream_signals__: bool = False
+    __slots__ = (
+        "handler",
+        "name",
+        "shared",
+        "owner",
+        "_handler_refs",
+        "_upstream_signals",
+        "_downstream_signals",
+        "_hkw",
+    )
+
+    handler: typing.Type[BaseSignalHandler]
+    shared: bool
+    name: str
 
     @classmethod
-    def __iter_signals_types(cls) -> typing.Iterable[BaseSignalHandler]:
-        """
-        Iterate over available signal handler types.
-
-        Returns
-        -------
-        Iterable[BaseSignalHandler]
-            An iterable of signal handler types.
-        """
-        yield from [
-            DynamicSignaledType,
-            BaseSignalHandler,
-        ]
-
-    @classmethod
-    def __peek_handler(cls, target, *args, **kwargs) -> BaseSignalHandler:
+    def __peek_handler(cls, target) -> typing.Type[BaseSignalHandler]:
         """
         Determine the appropriate signal handler for a given target.
 
@@ -249,14 +356,10 @@ class SignaledProperty:
         ----------
         target : Any
             The target value to be handled.
-        args : tuple
-            Positional arguments for the signal handler.
-        kwargs : dict
-            Keyword arguments for the signal handler.
 
         Returns
         -------
-        BaseSignalHandler
+        typing.Type[BaseSignalHandler]
             The signal handler that can handle the target.
 
         Raises
@@ -264,48 +367,12 @@ class SignaledProperty:
         ValueError
             If no appropriate signal handler is found.
         """
-        if target is __sentinel__:
-            target = (args, kwargs)
-        for signaled_type in cls.__iter_signals_types():
+        for signaled_type in SIGNAL_HANDLER_TYPES:
             if signaled_type.accept(target):
-                return signaled_type(target, *args, **kwargs)
-        raise ValueError(f"Unsupported signal type: {type(target)}")
+                return typing.cast(typing.Type[BaseSignalHandler], signaled_type)
+        raise ValueError(f"Unsupported signal type: {type(target)}")  # pragma: no cover
 
-    @classmethod
-    def __peek_stack_signals(cls) -> typing.Iterable["SignaledProperty"]:
-        """
-        Peek into the current call stack to find active signal instances.
-
-        Returns
-        -------
-        Iterable[SignaledProperty]
-            An iterable of active signal instances.
-        """
-        for frame in inspect.stack():
-            if frame.function == "__get__":
-                ref_signal = frame.frame.f_locals.get("self")
-                if isinstance(ref_signal, cls):
-                    yield ref_signal
-
-    @classmethod
-    def __mem_upstream_signals(cls) -> typing.Iterable["SignaledProperty"]:
-        """
-        Track upstream signal dependencies.
-
-        Returns
-        -------
-        Iterable[SignaledProperty]
-            An iterable of upstream signal dependencies.
-        """
-        try:
-            refs_signals = cls.__peek_stack_signals()
-            curr_signal: SignaledProperty = next(refs_signals)
-            last_signal: SignaledProperty = next(refs_signals)
-            curr_signal.__upstream_signals__[id(last_signal)] = last_signal
-        except StopIteration:
-            pass
-
-    def __init__(self, target=__sentinel__, *args, **kwargs) -> None:
+    def __init__(self, origin=__sentinel__, shared: bool = False, **kwargs) -> None:
         """
         Initialize a SignaledProperty instance.
 
@@ -318,8 +385,15 @@ class SignaledProperty:
         kwargs : dict
             Keyword arguments for the signal handler.
         """
-        self.__original_value__ = target
-        self.__handler__ = self.__peek_handler(target, *args, **kwargs)
+        self._upstream_signals: weakref.WeakSet["SignaledProperty"] = weakref.WeakSet()
+        self._downstream_signals: weakref.WeakSet["SignaledProperty"] = (
+            weakref.WeakSet()
+        )
+        self._handler_refs: weakref.WeakKeyDictionary[typing.Any, BaseSignalHandler] = (
+            weakref.WeakKeyDictionary()
+        )
+        self.shared = shared
+        self._hkw = {"origin": origin, "owner": self, **kwargs}
 
     def __call__(self, target) -> "SignaledProperty":
         """
@@ -335,8 +409,11 @@ class SignaledProperty:
         SignaledProperty
             A new instance of the SignaledProperty with the updated target value.
         """
-        (args, kwargs) = self.__handler__.original_value
-        return self.__class__(target, *args, **kwargs)
+        self._hkw["origin"] = target
+        return self
+
+    def __hash__(self):
+        return id(self) >> 5
 
     def __repr__(self) -> str:
         """
@@ -347,10 +424,54 @@ class SignaledProperty:
         str
             String representation of the property.
         """
-        return f"signal::<{self.__original_value__.__class__.__name__}>({repr(self.__original_value__)})"
+        return "signal:{name} {{ {fields} }}".format(
+            name=self.name,
+            fields=", ".join(
+                f"{k}: {v}"
+                for k, v in {
+                    "shared": self.shared,
+                    "owner": introspect.repr4cls(self.owner),
+                    "handler": introspect.repr4cls(self.handler),
+                }.items()
+            ),
+        )
 
-    @contextmanager
-    def visit(self, instance, owner):
+    def resolve_signal_handler(self, instance, owner=None):
+        ref = owner if self.shared or not instance else instance
+
+        handler = self._handler_refs.get(ref)
+        if handler:
+            return handler
+        self._handler_refs[ref] = handler = self.handler(
+            context=SignalContext(instance, owner), **self._hkw
+        )
+        return handler
+
+    @contextlib.contextmanager
+    def visit_on_setup(self, instance, owner):
+        self.handler = self.__peek_handler(self._hkw["origin"])
+        with self.visit_on_linking(instance, owner) as handler:
+            yield handler
+        self.visit = self.visit_on_linking
+
+    @contextlib.contextmanager
+    def visit_on_linking(self, instance, owner):
+        picker = SignalLinkPicker()
+        picker(self)
+        with self.visit_on_call(instance, owner) as handler:
+            yield handler
+        picker.pop()
+        # need to find a way to optimize the linking signals
+        # given A, B, C signals A -> B, C -> B
+        # when any link done we disable with line bellow
+        # but next time A/C call B and B does not report
+        # It's need to come up with a solution to reactivate B
+        # self.visit = self.visit_on_call
+
+    visit = visit_on_setup
+
+    @contextlib.contextmanager
+    def visit_on_call(self, instance, owner):
         """
         Context manager for visiting the signal.
 
@@ -361,120 +482,69 @@ class SignaledProperty:
         owner : type
             The owner class where the signal is defined.
 
-        Yields
-        ------
-        None
         """
-        yield
-        if not self.__skip_mem_upstream_signals__:
-            self.__mem_upstream_signals()
-            self.__skip_mem_upstream_signals__ = True
-
-    def set_skip_mem_upstream_signals(self, value: bool):
-        self.__skip_mem_upstream_signals__ = bool(value)
-
-    def __set_name__(self, owner, name):
-        self.__ref_name__ = name
-
-    def __get__(self, instance, owner):
-        with self.visit(instance, owner):
-            # TODO: obfuscate the traceback to the user in order to avoid confusion
-            return self.__handler__.get(self, instance, owner)
-
-    def __set__(self, instance, value) -> None:
-        if issubclass(type(value), SignaledProperty):
-            # the behavior for setting a signal to another signal it's to trigger a change
-            # in that way, the chain of signals will be updated correctly, this operation
-            # might be useful for triggering a change in a signal that is not directly related
-            # like the signal it's a mutable object and it's downstream attributes are not signals.
-            # One example of this is a list or a dict, where the signal is the container
-            return self.alter()
         try:
-            stats = self.__handler__.set_value(instance, value)
-            if stats:
-                self.alter()
+            yield self.resolve_signal_handler(instance, owner)
         except Exception as exc:
-            # obfuscate the traceback to the user in order to avoid confusion
+            # TODO: obfuscate the traceback to the user in order to avoid confusion
             exc.with_traceback(None)
             raise
 
-    def altered(self):
-        return self.__altered__
+    def __set_name__(self, owner, name):
+        self.name = name
+        self.owner = owner
 
-    def alter(self):
-        if self.__altered__:
-            return
-        self.__altered__ = True
-        for _, ref_signal in self.__upstream_signals__.items():
-            ref_signal.alter()
+    def __get__(self, instance, owner):
+        with self.visit(instance, owner) as handler:
+            return handler.get_value()
 
+    def get(self):
+        return self.__get__(None, SignaledProperty)
 
-class DynamicSignaledType(BaseSignalHandler):
-    def __init__(self, callable, *args, expire: int = 0, **kwargs) -> None:
-        super().__init__(callable, *args, **kwargs)
-        self.__func_like__ = self.__compute_function_like(callable)
-        self.__func__ = callable
-        self.__value__ = __sentinel__
-        self.expire = expire
-        self.computed_at = datetime.datetime.min
+    def set(self, value):
+        return self.__set__(SignaledProperty, value)
 
-    def __compute_function_like(self, original_value):
-        signature = inspect.signature(original_value)
-        parameters = list(signature.parameters.values())
+    def __set__(self, instance, value) -> None:
+        # if issubclass(type(value), SignaledProperty):
+        #     # the behavior for setting a signal to another signal it's to trigger a change
+        #     # in that way, the chain of signals will be updated correctly, this operation
+        #     # might be useful for triggering a change in a signal that is not directly related
+        #     # like the signal it's a mutable object and it's downstream attributes are not signals.
+        #     # One example of this is a list or a dict, where the signal is the container
+        #     return self.alter()
+        with self.visit(instance, type(instance)) as handler:
+            handler.set_value(value)
 
-        if not parameters:
-            return "staticmethod"
-        elif parameters[0].name == "self":
-            return "method"
-        elif parameters[0].name == "cls":
-            return "classmethod"
+    def link_signal_used(self, other: "SignaledProperty", reflexive: bool = True):
+        self._downstream_signals.add(other)
+        if reflexive:
+            other.link_signal_used_by(self, False)
+
+    def link_signal_used_by(self, other: "SignaledProperty", reflexive: bool = True):
+        self._upstream_signals.add(other)
+        if reflexive:
+            other.link_signal_used(self, False)
+
+    def alter(
+        self,
+        context: typing.Optional[SignalContext] = None,
+        src: typing.Optional["SignaledProperty"] = None,
+        **kwargs,
+    ):
+        if src and src.shared:
+            for handler in self._handler_refs.values():
+                handler.alter(
+                    **kwargs,
+                )
+        elif context:
+            handler = self.resolve_signal_handler(*context)
+            handler.alter(**kwargs)
         else:
-            return "staticmethod"
+            # check when context will be none
+            pass
 
-    @classmethod
-    def accept(cls, value: typing.Any) -> bool:
-        return callable(value)
-
-    def get_cache_value(self, instance) -> typing.Any:
-        # if the value is expired, return the sentinel
-        if (
-            self.expire
-            and (datetime.datetime.now() - self.computed_at).seconds > self.expire
-        ):
-            return __sentinel__
-        return self.__value__
-
-    def set_cache_value(self, instance, value):
-        self.computed_at = datetime.datetime.now()
-        # Todo: compare the value with the current value to avoid unnecessary updates
-        if issubclass(type(self.property), SignaledProperty):
-            self.property.alter()
-        self.__value__ = value
-
-    def compute_value(self, instance, owner) -> typing.Any:
-        args = []
-        if self.__func_like__ == "method":
-            # here is the assumption that the instance is always not None
-            args.append(instance)
-        elif self.__func_like__ == "classmethod":
-            args.append(owner)
-        return self.__func__(*args)
-
-    def get_value(self, instance, owner) -> typing.Any:
-        cached_value = self.get_cache_value(instance)
-        if cached_value is not __sentinel__:
-            return cached_value
-        self.property.set_skip_mem_upstream_signals(False)
-        computed_value = self.compute_value(instance, owner)
-        self.set_cache_value(instance, computed_value)
-        return computed_value
-
-    def alter(self):
-        # alter the value to force a recompute
-        self.__value__ = __sentinel__
-
-    def set_value(self, instance, value) -> bool:
-        raise AttributeError("Can't set dynamic signaled attribute")
+        for ref_signal in self._upstream_signals:
+            ref_signal.alter(**kwargs, src=self, context=context)
 
 
 # TODO: Add support for mutable objects as signals
@@ -493,16 +563,11 @@ class DynamicSignaledType(BaseSignalHandler):
 
 class signal(SignaledProperty):  # noqa: N801
     """
+    The signal property.
+
     The signal class is a decorator and descriptor used to define reactive properties in a class. It allows
     for automatic recalculation and caching of dependent properties when the base properties change. This
     is particularly useful for scenarios where properties depend on each other and need to be recalculated
     when their dependencies change.
+
     """
-
-
-if typing.TYPE_CHECKING:
-    # this is a workaround to provide type hints for the signal class
-    # see: https://github.com/python/typing/discussions/1102
-
-    class signal(signal, DynamicSignaledType, property):  # noqa: N801
-        ...

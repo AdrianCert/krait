@@ -21,8 +21,11 @@ class ExampleClass:
 
 class AnotherExampleClass:
     """
+    Other example.
+
     Represents a class that derives values based on a base value
     and interacts with another ExampleClass instance.
+
     """
 
     def __init__(self, base_value, other=None):
@@ -41,7 +44,11 @@ class AnotherExampleClass:
 
     @signal
     def combined_value(self):
-        """Calculates and returns the combined value of squared base and doubled other value."""
+        """
+        Example
+
+        Calculates and returns the combined value of squared base and doubled other value.
+        """
         return self.squared_value + self.other.doubled_value
 
 

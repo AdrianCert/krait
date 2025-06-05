@@ -7,9 +7,15 @@ dictionaries:
   - python
 words:
   - covdefaults
+  - Craciun
+  - FILECOVERAGE
   - FURB
+  - junitxml
   - Panaintescu
+  - posargs
   - pypa
   - techdocs
+  - toxworkdir
+  - XDIST
 ignoreWords: []
 import: []

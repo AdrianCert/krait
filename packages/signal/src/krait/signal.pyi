@@ -1,0 +1,36 @@
+import typing
+
+T = typing.TypeVar("T")
+
+class signal(typing.Generic[T]):  # noqa: N801
+    # Handler: DynamicSignalHandler
+    @typing.overload
+    def __init__(
+        self,
+        origin: typing.Optional[typing.Callable[..., T]] = None,
+        /,
+        shared: bool = False,
+        expire: int = 0,
+        **kwargs,
+    ) -> None: ...
+
+    # Handler: PrimitiveSignalHandler
+    @typing.overload
+    def __init__(
+        self,
+        origin: typing.Optional[T] = None,
+        /,
+        use_hashing: typing.Union[bool, typing.Callable[..., bool]] = True,
+        **kwargs,
+    ) -> None: ...
+    @typing.overload
+    def __call__(self, origin: typing.Callable[..., T]) -> "signal": ...
+    @typing.overload
+    def __call__(self, original_value: T) -> "signal": ...
+    def __get__(self, instance: typing.Any, owner: typing.Any) -> T: ...
+    def __set__(self, instance: typing.Any, value: T) -> None: ...
+    def __delete__(self, instance: typing.Any) -> None: ...
+    def __set_name__(self, owner: typing.Any, name: str) -> None: ...
+    def __repr__(self) -> str: ...
+    def get(self) -> T: ...
+    def set(self, value: T) -> None: ...
